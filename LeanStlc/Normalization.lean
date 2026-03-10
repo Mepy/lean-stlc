@@ -35,9 +35,11 @@ def wfSubst : Ctx -> Substitution -> Prop
 def semTyp (Γ : Ctx) e A := ∀ σ, ⟦ Γ ⟧ ∋ σ -> ℰ⟦ A ⟧ ∋ e ⦃ σ ⦄
 end
 
+/-- .var is identity substitution on the empty context -/
 def wfvar : ⟦ (⬝ : Ctx) ⟧ ∋ .var
   := by simp [wfSubst]
 
+/-- cons(`LeanStlc.Syntax.cons`, $+:$ ) to extend a substitution -/
 def wfcons : ∀ {Γ : Ctx} {σ} {A : Typ} {a : Exp},
   ⟦ Γ ⟧ ∋ σ ->
   ⟦ A ⟧ ∋ a ->
@@ -51,6 +53,7 @@ def wfcons : ∀ {Γ : Ctx} {σ} {A : Typ} {a : Exp},
     apply And.intro wfa
     intros n; cases n <;> simp
 
+/-- obtain the semantics of variable n -/
 def wfIn {Γ : Ctx} {σ} {n} {A} :
   ⟦ Γ ⟧ ∋ σ ->
   Γ ∋ n ∶ A ->
@@ -66,6 +69,11 @@ def wfIn {Γ : Ctx} {σ} {n} {A} :
     rw [eq]
     apply wfIn wσ' wte
 
+/-! we use `invUnit`, `invArr`, `invProd`, `invSum` to do inversion
+  when we know the the type $A$ in the logical relation $⟦ A ⟧ ∋ v$,
+  which will be used in the proof of elimination forms
+  (e.g. .app, .fst, .snd, .case) in the `fundamental` theorem.
+ -/
 def invUnit {v : Exp} (wfv : ⟦ .unit ⟧ ∋ v) : v = .unit
   := by cases v <;> simp at wfv <;> simp
 
@@ -91,6 +99,9 @@ def invSum {A1 A2 : Typ} {v : Exp}
     case inl v1 => left; exists v1
     case inr v2 => right; exists v2
 
+/-! the most important cases are .app and .lam,
+    and also the .case is a bit similar to .lam when interacting with variables binding.
+ -/
 theorem fundamental {Γ} {e : Exp} {A : Typ} (wte : Γ ⊢ e ∶ A)
   : Γ ⊨ e ∶ A
   := fun (σ) (wfσ : ⟦ Γ ⟧ ∋ σ) => -- to show ℰ⟦ A ⟧ ∋ e ⦃ σ ⦄

@@ -1,6 +1,56 @@
 open Nat
 
+
+/-!# Syntax of STLC with dbi, and lemmas
+	We define the syntax of the simply typed lambda calculus using de Bruijn indices,
+	and also define renaming and substitution operations,
+	along with their properties.
+
+	Conceptually, we must know that renaming and substitution are
+	two basic operations for handling variable binding in the syntax of the language.
+
+	Renaming := Nat -> Nat is a function (type)
+	that takes a variable index and returns another variable index,
+	used for renaming variables.
+	Substitution := Nat -> Exp is a function (type)
+	that takes a variable index and returns an expression,
+	used for substituting variables with expressions.
+
+	Yet, the internal binder structure requires us to lift renamings and substitutions
+	when we go under a binder (like in a $λ$),
+	which is what the `lift` and `up` functions are for,
+	the former for renaming and the latter for substitution.
+
+	With the help of `lift`, we can define how to `rename` an expression
+	by applying the renaming to the variable indices.
+	Which will introduce a lot of lemmas about Renaming and `lift`.
+	They are about the extensionality, identity and composability of `lift` and `rename`.
+
+	Similarly, with the help of `up`, we can define how to `subst` an expression
+	by applying the substitution to the variable indices.
+	Which will introduce a lot of lemmas about Substitution and `up`.
+	They are about the extensionality, identity and composability of `up` and `subst`.
+
+	Yet, to prove the composability of `subst`,
+	we need to handle the interaction between `rename` and `subst`,
+	which will introduce more lemmas about their interaction.
+
+	To understand how to come out with these lemmas,
+	we should consider `rename (ξ : Renaming)`
+	as a special case of `subst (σ : Substitution)` where `σ = .var ∘ ξ`,
+	especially for the `ξ := succ` case, which is used for lifting the substitution under a binder.
+	Therefore, we should expect that `rename ξ e = e ⦃ .var ∘ ξ ⦄`,
+	which is exactly what `renameIsSubst` states.
+	Yet to prove this, we need to prove the interaction between `rename` and `subst` first,
+	which is what `substRename` and `renameSubst` are for.
+
+	Finally, do not forget that our final goal is
+	to prove normalization and type safety using logical relations,
+	therefore we need to prove the key lemma `substCons`.
+ -/
+
 inductive Exp : Type where
+  /-- de Bruijn indexed varaibles, we range `n` over dbi -/
   | var : Nat -> Exp
   | lam : Exp -> Exp
   | app : Exp -> Exp -> Exp
@@ -14,10 +64,14 @@ inductive Exp : Type where
 deriving Repr
 
 
-/-- var-A mapping is a function from variable indices to As
- -- A = Exp for substitution
- -- A = Nat for renaming
- --/
+/-!
+  Nat -> A mapping is a function from variable indices to As
+
+  - A = Nat for renaming
+    given a renaming $ξ$, it will rename variable $n$ to $ξ n$
+  - A = Exp for substitution
+ -/
+
 @[simp]
 def cons {A : Type} (x : A) (ξ : Nat → A) : Nat → A
   | 0 => x
@@ -28,10 +82,11 @@ def Renaming := Nat -> Nat
 def Substitution := Nat -> Exp
 
 
+
 /-- 0 +: (fun n => (ξ n) + 1)
- -- 0 ↦ 0
- -- n + 1 ↦ (ξ n) + 1
- --/
+ 0 ↦ 0
+ n + 1 ↦ (ξ n) + 1
+ -/
 def lift (ξ : Renaming) : Renaming :=
   0 +: (succ ∘ ξ)
 
@@ -68,11 +123,13 @@ def rename (ξ : Renaming) : Exp -> Exp
   | .inr e => .inr (rename ξ e)
   | .case e0 e1 e2 => .case (rename ξ e0) (rename (lift ξ) e1) (rename (lift ξ) e2) -- lifting ξ to account for the new binder
 
-/-- rename succ : Substitution
- -- is to rename variables by adding 1 to their indices, i.e., var n ↦ var (n + 1)
- -- or written as succSubst : Substitution := rename succ
- --/
+/-! rename succ : Substitution
+  is to rename variables by adding 1 to their indices, i.e., var n ↦ var (n + 1)
+  or written as succSubst : Substitution := rename succ
+ -/
 example : ∀ n, rename succ (.var n) = .var (n + 1) := by simp [rename]
+example : rename succ (.lam (.var 0)) = (.lam (.var 0)) := by simp [rename, lift]
+example : ∀ n, rename succ (.lam (.var (n + 1))) = (.lam (.var (n + 1 + 1))) := by simp [rename, lift]
 
 
 
@@ -139,11 +196,11 @@ theorem renameComp ξ ζ ς : (∀ n , (ξ ∘ ζ) n = ς n) →
   all_goals repeat' constructor /- And.intro -/
   all_goals try apply_rules [liftComp]
 
-/-- up is to lift substitution
- -- .var 0 +: (fun n => rename succ (σ n) )
- -- 0 ↦ .var 0
- -- n + 1 ↦ rename succ (σ n)
- --/
+/-! up is to lift substitution
+	.var 0 +: (fun n => rename succ (σ n) )
+	0 ↦ .var 0
+ 	n + 1 ↦ rename succ (σ n)
+ -/
 def up (σ : Substitution) : Substitution :=
   .var 0 +: (rename succ ∘ σ)
 prefix:95 "⇑" => up
@@ -156,12 +213,12 @@ theorem upId (σ : Substitution) : (∀ n , σ n = .var n ) -> ∀ n, (⇑ σ) n
   | h, 0 => by simp [up]
   | h, n + 1 => by simp [up]; rw [h]; simp [rename]
 
-/-- ⇑ σ ∘ succ = (rename succ) ∘ σ
- -- analogue to liftSucc,
- -- (up σ ∘ succ) n = up σ (n + 1) = rename succ (σ n) = (rename succ ∘ σ) n
+/-! ⇑ σ ∘ succ = (rename succ) ∘ σ
+ 	analogue to liftSucc,
+ 	(up σ ∘ succ) n = up σ (n + 1) = rename succ (σ n) = (rename succ ∘ σ) n
 
- -- another proof := fun n => rfl
- --/
+ 	another proof := fun n => rfl
+ -/
 theorem upSucc σ : ∀ n , (⇑ σ ∘ succ) n = (rename succ ∘ σ) n
   := by simp [up]
 
@@ -281,6 +338,7 @@ theorem substRename ξ σ τ (h : ∀ n, (σ ∘ ξ) n = τ n) :
   all_goals repeat' constructor /- And.intro -/
   all_goals try apply_rules [upLift, upRename, upVar]
 
+/-- extensional, rename ξ (e ⦃ σ ⦄) = e ⦃ rename ξ ∘ σ ⦄ -/
 theorem renameSubst ξ σ τ (h : ∀ n, (rename ξ ∘ σ) n = τ n) :
   ∀ e, rename ξ (e ⦃ σ ⦄) = e ⦃ τ ⦄
   := by
@@ -307,7 +365,7 @@ theorem upSubst ρ σ τ (h : ∀ n, (subst ρ ∘ σ) n = τ n) :
     _ = (⇑ τ) (n + 1) := by simp [up]
 
 /-- extensional, (subst ρ ∘ subst σ) = subst (subst ρ ∘ σ) -/
-theorem substComp ρ σ τ (h : ∀ n, (subst ρ ∘ σ) n = τ n) :
+theorem substComp (ρ σ τ : Substitution) (h : ∀ n, (subst ρ ∘ σ) n = τ n) :
   ∀ e, e ⦃ σ ⦄ ⦃ ρ ⦄ = e ⦃ τ ⦄
   := by
   intros e; induction e
