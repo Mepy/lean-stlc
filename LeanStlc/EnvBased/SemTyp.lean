@@ -101,6 +101,7 @@ theorem clos {Γ Ξ eξ e A B} :
   refine ⟨ .clos (.env ξ) e , ?_, ?_ ⟩
 
   simp [ValOf]
+  refine ⟨ 𝓖ξ.isVal, ?_ ⟩
   intros v 𝓥v
   apply he (ξ∷v) (EnvOf.cons 𝓖ξ 𝓥v)
 
@@ -121,7 +122,8 @@ theorem app {Γ e1 e2 A B} :
   rcases eξ <;> try simp [ValOf] at 𝓥v1
   rename_i ξ
   unfold ExpOf at *
-  rcases 𝓥v1 v2 𝓥v2 with ⟨v, 𝓥v, ev⟩
+  rcases 𝓥v1 with ⟨isξ, 𝓥f⟩
+  rcases 𝓥f v2 𝓥v2 with ⟨v, 𝓥v, ev⟩
   refine ⟨ v , 𝓥v, ?_ ⟩
   apply Eval.app ev1 ev2 ev
 
@@ -253,7 +255,7 @@ theorem cons {Γ γ v A} :
   v.isVal ->
   ⊨ γ ∷ v ∶ Γ ; A
   := fun 𝓖γ hv isv => by
-  rcases adequacy hv nil with ⟨v', 𝓥v', ev⟩
+  rcases adequacy hv nil with ⟨v', isv', 𝓥v', ev⟩
   have hv' : v = v' := ev.of_isVal isv
   simp [EnvOf] at *
   refine ⟨ 𝓖γ , ?_ ⟩
